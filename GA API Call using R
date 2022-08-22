@@ -1,0 +1,399 @@
+library(googleAnalyticsR)
+library(xlsx)
+library(anytime)
+library("dplyr")
+library("tidyr")
+library("janitor")
+library(lubridate)
+library(tidyverse)
+library(googlesheets4)
+library(googleAuthR)
+
+
+googleAuthR::gar_cache_empty()
+googleAuthR::gar_set_client("~/Dfin Dashboard/Webmaster.json")
+gar_auth(email= "webmastertools@semetrical.com",
+         scopes = "https://www.googleapis.com/auth/analytics")
+ga_auth(email = 'webmastertools@semetrical.com')
+gs4_auth(email = 'webmastertools@semetrical.com')
+
+
+# VARIABLES #
+
+brandSplitReport <- range_read("1qQUpH95boIQci5aXM-22lOGiqbO2-f37lRWiJ9DmkCk", "Brand Split Report", range = 'A:H')
+
+ga_id1 <- 91245521
+cl_id1 <- 107091079
+
+date_1 <-as.Date("2022-01-01")
+date_2 <- as.Date(Sys.Date()-1)
+date_range <- c(date_1,date_2)
+
+facebookRegexp <- "an|fb|msg"
+trovitRegexp <- "trovit|Trovit"
+mitulaRegexp <- "Lifull|lifull|Mitula|mitula"
+instagramRegexp <- "ig"
+
+paidSearchChannelGrouping <- dim_filter("channelGrouping", "REGEXP", "Paid Search")
+paidSearchFilter <- filter_clause_ga4(list(paidSearchChannelGrouping), operator = "AND")
+
+displayChannelGrouping <- dim_filter("channelGrouping", "REGEXP", "Display")
+displayFilter <- filter_clause_ga4(list(displayChannelGrouping), operator = "AND")
+
+
+# FUNCTIONS #
+replaceNameFunction <- function(x){
+  x[grepl(facebookRegexp,x$source),2] <- 'facebook'
+  x[grepl(trovitRegexp,x$source),2] <- 'trovit'
+  x[grepl(mitulaRegexp,x$source),2] <- 'mitula'
+  x[grepl(instagramRegexp,x$source),2] <- 'instagram'
+  x}
+
+replaceNameFunctionAll <- function(x){
+  x[grepl(facebookRegexp,x$source),3] <- 'facebook'
+  x[grepl(trovitRegexp,x$source),3] <- 'trovit'
+  x[grepl(mitulaRegexp,x$source),3] <- 'mitula'
+  x[grepl(instagramRegexp,x$source),3] <- 'instagram'
+  x}
+
+
+paidConcatNameFunction <- function(x){
+  x$source <- paste("_Paid_Search",x$source,sep = "_")
+  x
+}
+
+paidsocialConcatNameFunction <- function(x){
+  x$source <- paste("_Paid_Social",x$source,sep = "_")
+  x
+}
+
+displayConcatNameFunction <- function(x){
+  x$source <- paste("_Display", x$source,sep = "_")
+  x
+}
+
+spaceless <- function(x) {
+  colnames(x) <- gsub(" ", "_", colnames(x))
+  ;x}
+
+removeBrackets <- function(x){
+  colnames(x) <- gsub("\\(|\\)", "", colnames(x))
+  ;x}
+
+na.zero <- function (x) {
+  x[is.na(x)] <- 0
+  return(x)
+}
+
+# QUERIES #
+
+paidSessions <- google_analytics (ga_id1,
+                                  date_range = date_range,
+                                  metrics = "sessions",
+                                  dimensions = c("date", "source"),
+                                  dim_filter = paidSearchFilter,
+                                  anti_sample = TRUE)
+
+
+displaySessions <- google_analytics (ga_id1,
+                                     date_range = date_range,
+                                     metrics = "sessions",
+                                     dimensions = c("date", "source"),
+                                     dim_filter = displayFilter,
+                                     anti_sample = TRUE)
+
+allSessions <- google_analytics (ga_id1,
+                                 date_range = date_range,
+                                 metrics = "sessions",
+                                 dimensions = c("date", "channelGrouping","source"),
+                                 anti_sample = TRUE)
+
+
+
+countrylifeSessions <- google_analytics (cl_id1,
+                                         date_range = date_range,
+                                         metrics = "sessions",
+                                         dimensions = c("date"),
+                                         anti_sample = TRUE)
+
+
+##Splits up Paid Search and Paid Social
+
+totalSiteVists <- allSessions %>% group_by(date) %>% summarise(sum(sessions))
+unique(displaySessions$source)
+
+allSessions2 <- filter(allSessions, channelGrouping == 'Paid Search')
+
+allSessions2 <- replaceNameFunctionAll(allSessions2)  
+
+Paid_Sc_all_Sessions3 <- allSessions2[!grepl("facebook|instagram|nextdoor|pinterest",allSessions2$source),]
+
+Paid_Sh_all_Sessions3 <- allSessions2[grepl("facebook|instagram|nextdoor|pinterest",allSessions2$source),]
+
+Paid_Sh_all_Sessions3[grepl("Paid Search", Paid_Sh_all_Sessions3$channelGrouping),2] <- "Paid Social"
+
+allSessions <- allSessions[!grepl("Paid Search", allSessions$channelGrouping),]
+
+allSessions <- rbind(allSessions, Paid_Sh_all_Sessions3,Paid_Sc_all_Sessions3)
+
+
+allSessions <- subset(allSessions, select =-source)
+
+
+allSessions <- allSessions %>% group_by(date,channelGrouping) %>% summarise(sum(sessions))
+
+names(allSessions)[1] <- "Date"
+names(allSessions)[2] <- "channelGrouping"
+names(allSessions)[3] <- "sessions"
+
+
+#Display Other and Main Sources replacer
+
+for(i in 1:nrow(displaySessions)){
+  if(displaySessions$source[i]=="criteo"){
+    displaySessions$source[i]="criteo"
+  }else if (displaySessions$source[i] == "facebook"){
+    displaySessions$source[i] = "facebook"
+  }else if (displaySessions$source[i] == "google"){
+    displaySessions$source[i] = "google"
+  }else if (displaySessions$source[i] == "outbrain"){
+    displaySessions$source[i] = "outbrain"
+  }else if (displaySessions$source[i] == "PIE"){
+    displaySessions$source[i] = "PIE"
+  }else if (displaySessions$source[i] == "reach"){
+    displaySessions$source[i] = "reach"
+  }else if (displaySessions$source[i] == "adfenix"){
+    displaySessions$source[i] = "Other"
+  }else if (displaySessions$source[i] == "adroll"){
+    displaySessions$source[i] = "Other"
+  }else displaySessions$source[i] = "Not_Needed"
+}
+
+
+#Paid Other and Main Sources Replacer
+
+# MESSIER PROCESSING Need to group the sources in the correct way for the paid search#
+
+paidSessions[grepl(facebookRegexp, paidSessions$source),3]
+
+paidSessions2 <- replaceNameFunction(paidSessions)
+
+for(i in 1:nrow(paidSessions2)){
+  if(paidSessions2$source[i]=="bing"){
+    paidSessions2$source[i]="bing"
+  }else if (paidSessions2$source[i] == "facebook"){
+    paidSessions2$source[i] = "facebook"
+  }else if (paidSessions2$source[i] == "google"){
+    paidSessions2$source[i] = "google"
+  }else if (paidSessions2$source[i] == "home_co_uk"){
+    paidSessions2$source[i] = "home.co.uk"
+  }else if (paidSessions2$source[i] == "mitula"){
+    paidSessions2$source[i] = "mitula"
+  }else if (paidSessions2$source[i] == "newsnow"){
+    paidSessions2$source[i] = "newsnow"
+  }else if (paidSessions2$source[i] == "nextdoor"){
+    paidSessions2$source[i] = "nextdoor"
+  }else if (paidSessions2$source[i] == "placebuzz"){
+    paidSessions2$source[i] = "placebuzz"
+  }else if (paidSessions2$source[i] == "trovit"){
+    paidSessions2$source[i] = "trovit"
+  }else if (paidSessions2$source[i] == "instagram"){
+    paidSessions2$source[i] = "instagram"
+  }else if (paidSessions2$source[i] == "pinterest"){
+    paidSessions2$source[i] = "pinterest"
+  }else if (paidSessions2$source[i] == "adzuna"){
+    paidSessions2$source[i] = "Other"
+  }else if (paidSessions2$source[i] == "newhouseprices"){
+    paidSessions2$source[i] = "Other"
+  }else if (paidSessions2$source[i] == "rentberry"){
+    paidSessions2$source[i] = "Other"
+  }else paidSessions2$source[i] = "Not_Needed"
+}
+
+#Drop Anything Which has Not_Needed in the Source
+
+paidSocial <- filter(paidSessions2,source %in% c("pinterest","facebook","nextdoor","instagram"))
+
+paidSearch <- paidSessions2 %>% filter(!source %in% c("pinterest", "facebook", "nextdoor", "instagram"))
+
+
+paidSearch2 <- paidConcatNameFunction(paidSearch)
+
+paidSocial2 <-paidsocialConcatNameFunction(paidSocial)
+
+displaySessions2 <- replaceNameFunction(displaySessions)
+displaySessions3 <- displayConcatNameFunction(displaySessions2)
+
+
+paidSocial3 <- paidSocial2 %>% group_by(date,source) %>% summarise(sum(sessions))
+names(paidSocial3)[3] <- 'sessions'
+paidSocialFinal <- pivot_wider(paidSocial3, values_from = 'sessions', names_from = source)
+names(paidSocialFinal)[1] <- "Date"
+
+paidSearch3 <- paidSearch2 %>% group_by(date,source) %>% summarise(sum(sessions))
+names(paidSearch3)[3] <- 'sessions'
+paidSearchFinal <- pivot_wider(paidSearch3, values_from = 'sessions', names_from = source)
+names(paidSearchFinal)[1] <- "Date"
+
+displaySessions4 <- displaySessions3 %>% group_by(date,source) %>% summarise(sum(sessions))
+names(displaySessions4)[3] <- 'sessions'
+displaySessionsFinal <- pivot_wider(displaySessions4, values_from = 'sessions', names_from = source)
+names(displaySessionsFinal)[1] <- "Date"
+
+displaySessionsFinal <- na.zero(displaySessionsFinal)
+
+paidSearchFinal <- na.zero(paidSearchFinal)
+
+paidSocialFinal <-na.zero(paidSocialFinal)
+
+col_lst_Pd_Sc = c("_Paid_Search_bing", "_Paid_Search_google", "_Paid_Search_home.co.uk", "_Paid_Search_mitula", "_Paid_Search_newsnow", "_Paid_Search_Other", "_Paid_Search_placebuzz", "_Paid_Search_trovit")  
+
+col_lst_Pd_Sh = names(subset( paidSocialFinal, select = -Date))
+
+paidSocialFinal$Paid_Sc_T = rowSums(paidSocialFinal[,c(col_lst_Pd_Sh)])
+
+paidSearchFinal$Paid_Sh_T = rowSums(paidSearchFinal[,col_lst_Pd_Sc])
+
+names(paidSocialFinal)
+
+names(paidSearchFinal)
+
+
+
+col_list_Dsp = c("_Display_criteo", "_Display_google", "_Display_Other", "_Display_PIE", "_Display_reach", "_Display_facebook","_Display_outbrain")
+
+displaySessionsFinal$Display_T = rowSums(displaySessionsFinal[,col_list_Dsp])
+
+
+brandSplitReport$Date <- as.Date(brandSplitReport$Date, format = '%Y-%m-%d')
+
+brandSplitReport$`Brand Clicks perc` <- brandSplitReport$`Brand Clicks`/(brandSplitReport$`Brand Clicks`+brandSplitReport$`Non-Brand Clicks`)
+brandSplitReport$`Non_Brand Clicks perc` <- 1- brandSplitReport$`Brand Clicks perc`
+brandSplitReport$`Organic_Branded` <- brandSplitReport$`Brand Clicks perc` *brandSplitReport$`Organic Traffic`
+brandSplitReport$`Organic_Non_Branded` <- brandSplitReport$`Non_Brand Clicks perc` *brandSplitReport$`Organic Traffic`
+
+allSessionsFinal <- merge(pivot_wider(allSessions, values_from = 'sessions', names_from = channelGrouping), brandSplitReport[,c("Date","Organic_Branded","Organic_Non_Branded"),], by = "Date", all.x=TRUE)
+allSessionsFinal$Date <- as.Date(allSessionsFinal$Date, format = '%Y-%m-%d')
+
+view(allSessionsFinal)
+
+library(bigQueryR)
+library(googlesheets4)
+
+googleAuthR::gar_cache_empty()
+googleAuthR::gar_set_client("~/APIS/OTM_OAuth_Updated.json")
+
+bqr_auth(email = "naaza.zimba@onthemarket.com")
+##googleAuthR::gar_debug_parsing('gar_parse_error.ds')
+
+sql_date_1 <- gsub("-","",as.character(date_1))
+sql_date_2 <- gsub("-","",as.character(date_2))
+
+part_2 <- "' AND '"
+part_1_sess <- "SELECT event_date, count(*) as
+sessions,device.operating_system  from  `onthemarket-mobile-apps.analytics_202200585.events_*` WHERE _TABLE_SUFFIX BETWEEN '"
+part_3_sess <- "' AND event_name = 'session_start' GROUP BY event_date,device.operating_system ORDER BY event_date asc"
+
+sessSQL <- paste(part_1_sess, sql_date_1, part_2, sql_date_2, part_3_sess,sep="")
+app_sessions <- bqr_query("onthemarket-mobile-apps","events_",
+                          sessSQL, useLegacySql = FALSE)
+library(lubridate)
+app_sessions$Date <- ymd(app_sessions$event_date)
+app_sessions$operating_system <- paste("_Apps_",app_sessions$operating_system)
+app_sessions <- pivot_wider(app_sessions[,2:4], names_from = operating_system, values_from = sessions)
+
+colnames(countrylifeSessions)[1] <- "Date"
+colnames(countrylifeSessions)[2] <- "Country_Life_Sessions"
+
+totalSiteVists <- allSessions %>% group_by(Date) %>% summarise(sum(sessions))
+names(totalSiteVists)[1] <- "Date"
+names(totalSiteVists)[2] <- "Total_Site_Visits"
+list <- list(allSessionsFinal, paidSocialFinal, paidSearchFinal, displaySessionsFinal,app_sessions,countrylifeSessions,totalSiteVists)
+merged <- list %>% reduce(full_join, by = 'Date')
+
+merged <- removeBrackets(spaceless(merged))
+
+merged <- merged[,order(colnames(merged))] %>%
+  select(Date, everything())
+
+merged <- na.zero(merged)
+
+merged1 <- merged
+
+merged1$YearMonth <- format(merged1$Date, "%b%Y") 
+
+drops <- c("Date","YearMonth")
+
+### We want to apply this function to all columns in the separated data frames below which can be done in a for loop within a for loop 
+
+col_namess <- colnames(merged1[ , !(names(merged1) %in% drops)])
+
+mergedCumalatives <- merged1 %>%
+     group_by(YearMonth) %>%
+    mutate(across(col_namess, (~cumsum(.x)/seq_along(.x)))) 
+  
+mergedForecast <-  mergedCumalatives %>% group_by(YearMonth,Date) %>%
+  mutate(across(col_namess, ~cumsum(.x)*days_in_month(Date)/seq_along(.x)))
+
+#colnames(mergedForecast) <- paste(colnames(mergedForecast), "Forecast", sep = "_")
+
+#colnames(mergedForecast)[colnames(mergedForecast) == 'Date_Forecast'] <- 'Date'
+
+#colnames(mergedForecast)[colnames(mergedForecast) == 'Date_Forecast'] <- 'Date'
+
+
+#col_namess_F = names(subset(mergedForecast, select = -c(Date,YearMonth_Forecast)))
+
+mergedForecast$Date <- 'Forecast'
+
+merged1$Date <- as.character(merged1$Date)
+
+Date_List = c('Jan2022' ,'Feb2022','Mar2022','Apr2022','May2022','Jun2022','Jul2022','Aug2022','Sep2022','Oct2022','Nov2022','Dec2023','Jan2023','Feb2023','Mar2023','Apr2023','May2023','Jun2023','Jul2023','Aug2023','Sep2023','Aug2023','Sep2023','Oct2023','Nov2023','Dec2024','Jan2024','Feb2024','Mar2024','Apr2024','May2024','Jun2024','Jul2024','Aug2024','Sep2024','Aug2024','Sep2024','Oct2024','Nov2024','Dec2024')
+
+#view(merged1)
+
+#view(mergedForecast)
+
+#for (i in Date_List) {
+#  assign(paste0("",i), merged1[merged1$YearMonth == i,])
+#  assign(paste0("F_",i), tail(mergedForecast[mergedForecast$YearMonth == i,], n=1))
+#}
+
+for (i in Date_List) {
+  assign(paste0("",i), rbind(merged1[merged1$YearMonth == i,],tail(mergedForecast[mergedForecast$YearMonth == i,], n=1)))
+}
+
+
+googleAuthR::gar_cache_empty()
+googleAuthR::gar_set_client("~/Dfin Dashboard/Webmaster.json")
+gar_auth(email= "nz@semetrical.com",
+         scopes = "https://www.googleapis.com/auth/analytics")
+ga_auth(email = 'nz@semetrical.com')
+gs4_auth(email = 'nz@semetrical.com')
+
+
+sheet_write(merged, ss = '1qQUpH95boIQci5aXM-22lOGiqbO2-f37lRWiJ9DmkCk', sheet = "GA Sesssions Data")
+
+
+DataFrame_List = list(Jan2022,Feb2022,Mar2022,Apr2022,May2022,Jun2022,Jul2022,Aug2022,Sep2022,Oct2022,Nov2022,Dec2022,Jan2023,Feb2023,Mar2023,Apr2023,May2023,Jun2023,Jul2023,Aug2023,Sep2023,Oct2023,Nov2023,Dec2023,Jan2024,Feb2024,Mar2024,Apr2024,May2024,Jun2024,Jul2024,Aug2024,Sep2024,Oct2024,Nov2024,Dec2024)
+
+
+for (i in DataFrame_List) {
+  if(nrow(i) == 0){
+    break
+  }
+    sheet_write(i, ss = "1qQUpH95boIQci5aXM-22lOGiqbO2-f37lRWiJ9DmkCk", sheet = toString(unique(i['YearMonth'])))
+      }
+
+#################
+
+
+# UPLOAD TO BIGQUERY #
+
+#googleAuthR::gar_cache_empty()
+#googleAuthR::gar_set_client("~/R/API/OTM_OAuth_Updated.json")
+#gar_auth(email= "danny.smith@onthemarket.com",
+#        scopes = "https://www.googleapis.com/auth/bigquery")
+#bqr_auth(email = 'danny.smith@onthemarket.com')
+#
+#bqr_upload_data("otm-marketing","daily_tracker", "GA Data", merged, writeDisposition = "WRITE_TRUNCATE")
