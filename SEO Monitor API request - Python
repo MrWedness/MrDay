@@ -1,0 +1,44 @@
+import requests
+import json
+import pandas
+
+def tableGeneration(rankings):
+    outputRows = []
+    for i in range(len(rankings)):
+        keyword = rankings[i]['keyword_data']['name']
+        avgSV = rankings[i]['keyword_data']['average_search_volume']
+        rankingPositionDesktop = rankings[i]['position']
+        positionTrendDesktop = rankings[i]['position_trend']
+        landingPageDesktop = rankings[i]['keyword_data']['landing_page']
+        rankingPositionMobile = rankings[i]['position_mobile']
+        positionTrendDMobile = rankings[i]['position_trend_mobile']
+        landingPageMobile = rankings[i]['keyword_data']['landing_page_mobile']
+
+        keywordData = [keyword, avgSV, rankingPositionDesktop, positionTrendDesktop, landingPageDesktop,
+                       rankingPositionMobile, positionTrendDMobile, landingPageMobile]
+        outputRows.append(keywordData)
+
+    return outputRows
+
+
+if __name__ == "__main__":
+    url = "https://api.internal.seomonitor.com/api/v1.2/keyword_data/103813/2022-01-01/2022-01-01/"  # URL dictates the site and date range
+    api_keyfile = open('APISecret.json')
+    api_dict=json.load(api_keyfile)
+    requestBody = requests.get(url, headers={
+        'Authorization': api_dict['api_secret']})  # API key needs to be an Auth header as per documentation
+    rankingData = requestBody.content
+    rankingDict = json.loads(rankingData)
+
+    print(rankingDict[0])
+
+    rankingTable = tableGeneration(rankingDict)
+
+    df = pd.DataFrame(rankingTable,
+                      columns=['Keyword', 'Average Search Volume', 'Desktop Rank', 'Desktop Trend',
+                               'Desktop Landing Page',
+                               'Mobile Rank', 'Mobile Trend', 'Mobile Landing Page'])
+
+    print(df)
+    print(rankingTable)
+    df.to_csv(r"C:\Users\DannySmith\Documents\Ranking Reports\Test.csv", sep = ',')
