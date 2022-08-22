@@ -1,0 +1,62 @@
+import psycopg2
+
+import pandas as pd
+
+import gspread 
+
+from oauth2client.service_account import ServiceAccountCredentials
+
+import pandas as pd
+
+from apiclient.discovery import build
+
+
+scope = ['https://spreadsheets.google.com/feeds',
+         'https://www.googleapis.com/auth/drive',
+         'https://www.googleapis.com/auth/analytics.readonly']
+
+credentials = " GA Service Account.json name", scope)
+
+gc = gspread.authorize(credentials)
+
+spreadsheet_key = 'spreadsheet to send this too'
+
+
+
+def create_server_connection( dname,host_name,port, user_name, pword):
+     global con
+     con = None
+     try:
+         con = psycopg2.connect(dbname=dname, host=host_name,
+                                port=port, user=user_name, password=pword)
+         print("MySQL Database connection successful")
+     except Exception as e:
+         print(e)
+         print('MySQL Database connection unsuccessful')
+
+     return con
+
+create_server_connection("database_name", "Password","Port","user name","password")
+
+cur0 = con.cursor()
+
+
+## This is the query for the Developer Dash. Change the month and year which you are looking for in the code.
+## The code spits out the tables needed for the Email Import Range and Email Import Range 2.
+## All that needs to be done is to append it to the bottom of the code.
+cur0.execute("""select alert_type,pas.sent_on::date, count(distinct(pas.email_id)) as sent, count(distinct(pao.email_id)) as opened
+  from user_engagement_spectrum_schema.property_alert_sent pas
+  left join user_engagement_spectrum_schema.property_alert_opened pao on
+       pas.email_id=pao.email_id and pao.year=2022 and pao.month>=6
+  where pas.alert_type in ('developer-alert','developer-email') and pas.year=2022 and pas.month=7 group by alert_type,pas.sent_on::date order by alert_type,pas.sent_on::date;
+""")
+
+data0 = pd.DataFrame(cur0.fetchall(), columns = [desc[0] for desc in cur0.description])
+
+print(data0)
+
+cur0.close()
+
+Email_Range =  data0[data0['alert_type'] == 'developer-alert']
+
+Email_Range2 = data0[data0['alert_type'] == 'developer-email']
