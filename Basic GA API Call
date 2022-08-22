@@ -1,0 +1,55 @@
+library(dplyr, warn.conflicts = FALSE)
+options(dplyr.summarise.inform = FALSE)
+library(googleAnalyticsR)
+library(googlesheets4)
+library(googleAuthR)
+library(bigQueryR)
+library(data.table)
+
+
+googleAuthR::gar_cache_empty()
+googleAuthR::gar_set_client("~/Dfin Dashboard/Webmaster.json")
+gar_auth(email= "nz@semetrical.com",
+         scopes = "https://www.googleapis.com/auth/analytics")
+ga_auth(email = 'nz@semetrical.com')
+
+
+
+date1 <- as.Date("2021-01-01","%Y-%m-%d")
+date2 <- as.Date(format(Sys.Date()-1,"%Y-%m-%d"),"%Y-%m-%d")
+
+
+
+date_range <- c(date1, date2)
+ga_id_DFIN <- Enter GA ID
+
+
+ga_call <- function(date_range, ...){
+  per_day <- seq(date_range[[1]], date_range[[2]], by = 1)
+  calls <- lapply(per_day, function(x){
+    message("Fetching: ", x)
+    google_analytics(..., date_range = c(x, x))
+  })
+  Reduce(rbind, calls)
+}
+
+DFIN_GA_SessionData <- ga_call(ga_id_DFIN,
+                                       date_range = date_range,
+                                       metrics = c("sessions","users","goal6Completions","goal7Completions","bounces","sessionDuration","pageviews"),
+                                       dimensions = c("date", "channelGrouping","landingPagePath","deviceCategory","country"),
+                                       anti_sample = TRUE)
+
+
+googleAuthR::gar_cache_empty()
+googleAuthR::gar_set_client("~/Dfin Dashboard/Webmaster.json")
+gar_auth(email= "webmastertools@semetrical.com",
+         scopes = "https://www.googleapis.com/auth/analytics")
+bqr_auth(email = 'webmastertools@semetrical.com')
+
+
+source("~/R Functions/allHeaderRenameFunction (1).R")
+DFIN_GA_SessionData <- headerRename(DFIN_GA_SessionData)
+
+
+bqr_upload_data("project-dashboard-321811","Client_DFIN", "DFIN_GA_SessionData", DFIN_GA_SessionData, writeDisposition = "WRITE_TRUNCATE")
+
