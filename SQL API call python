@@ -1,0 +1,192 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Aug  2 11:23:54 2022
+
+@author: Nazza
+"""
+
+import psycopg2
+
+import pandas as pd
+
+import gspread 
+
+from oauth2client.service_account import ServiceAccountCredentials
+
+import pandas as pd
+
+from apiclient.discovery import build
+
+
+scope = ['https://spreadsheets.google.com/feeds',
+         'https://www.googleapis.com/auth/drive',
+         'https://www.googleapis.com/auth/analytics.readonly']
+
+credentials = ServiceAccountCredentials.from_json_keyfile_name(
+    'otm-naaza-script-9cddf044dcb8.json', scope)
+
+gc = gspread.authorize(credentials)
+
+spreadsheet_key = '10poR671OOg3wZQKPh-VGrwuqUoGYpcGL9zAIuyeXt-k'
+
+
+
+def create_server_connection( dname,host_name,port, user_name, pword):
+     global con
+     con = None
+     try:
+         con = psycopg2.connect(dbname=dname, host=host_name,
+                                port=port, user=user_name, password=pword)
+         print("MySQL Database connection successful")
+     except Exception as e:
+         print(e)
+         print('MySQL Database connection unsuccessful')
+
+     return con
+
+create_server_connection("am", "10.0.34.147","5439","thomas_voyle","%sh7E&8w8@Kt84")
+
+cur0 = con.cursor()
+
+
+## This is the query for the Developer Dash. Change the month and year which you are looking for in the code.
+## The code spits out the tables needed for the Email Import Range and Email Import Range 2.
+## All that needs to be done is to append it to the bottom of the code.
+cur0.execute("""select alert_type,pas.sent_on::date, count(distinct(pas.email_id)) as sent, count(distinct(pao.email_id)) as opened
+  from user_engagement_spectrum_schema.property_alert_sent pas
+  left join user_engagement_spectrum_schema.property_alert_opened pao on
+       pas.email_id=pao.email_id and pao.year=2022 and pao.month>=6
+  where pas.alert_type in ('developer-alert','developer-email') and pas.year=2022 and pas.month=7 group by alert_type,pas.sent_on::date order by alert_type,pas.sent_on::date;
+""")
+
+data0 = pd.DataFrame(cur0.fetchall(), columns = [desc[0] for desc in cur0.description])
+
+print(data0)
+
+cur0.close()
+
+Email_Range =  data0[data0['alert_type'] == 'developer-alert']
+
+Email_Range2 = data0[data0['alert_type'] == 'developer-email']
+
+
+
+
+### This reads in the purple part of the graph all that needs to be done every month is to change the month which you want to pull the data for
+
+cur1 = con.cursor()
+
+cur1.execute("""select month, (sum(live_instructions) / count(distinct month)) as availableDeveloperProperties,
+ sum(gross_email_leads + gross_phone_leads + website_visits) as totalDeveloperLeads,
+ sum(gross_email_leads) as emailDeveloperLeads, sum(gross_phone_leads) as phoneDeveloperLeads,
+ sum(website_visits) as visitDeveloper, 
+ (count(branch_id) / count( distinct month)) as developments
+from analytics_dashboards.new_homes_developer_leads_by_month_branch 
+where month = '2022-07-01'
+group by month
+
+""")
+
+data1 = pd.DataFrame(cur1.fetchall(), columns = [desc[0] for desc in cur1.description])
+
+## This grabs the entire dataframe from the sheets and we can then filter to which date we want 
+sh= gc.open_by_key(spreadsheet_key)
+
+ws = sh.worksheet('Property stock')
+
+cell = ws.find("31-Jul-22")
+
+values_list = ws.row_values(cell.row)
+
+Prop_stock = pd.DataFrame([values_list], columns = ['Date','Available Lettings','Available Sale', 'Total Lettings','Total Sale', 'Let Agreed', 'SSTC'])
+
+Prop_stock['Let Agreed'] = Prop_stock['Let Agreed'].apply(lambda x: x.replace(',',''))
+
+Prop_stock['SSTC'] = Prop_stock['SSTC'].apply(lambda x: x.replace(',',''))
+
+Prop_stock[['Available Lettings','Available Lettings','Total Lettings','Available Sale','Total Sale','Let Agreed','SSTC']] = Prop_stock[['Available Lettings','Available Lettings','Total Lettings','Available Sale','Total Sale','Let Agreed','SSTC']].apply(lambda x:int(x))
+
+Developer_Report  = pd.concat([data1,Prop_stock['Available Sale']], axis = 1)
+
+Developer_Report['month'] = Developer_Report['month'].astype(str)
+
+
+
+## This is the code for the commercial dashboard. Currently, it's only the SQL part which pulls in Sales Leads, Lettings Leads, Sales Stock and Lettings Stock.
+##Change the date on the bottom part to match the month you are trying to pull it into.
+cur1 = con.cursor()
+
+cur1.execute("""with retail_properties as (
+    select distinct instruction_id, property_type, otm_search_channels from instruction_history
+    where property_type like '%commercial-property%'
+),
+data1 as( select concat(left(all_leads.time, 7),'-01') as month, property_type, (case 
+when(otm_search_channels like '%sale%') then 'Sales'
+when(otm_search_channels like '%rent%') then 'Lettings' else 'Other' END) as otm_search_channels, 
+count(*) as leads from all_leads
+    left join retail_properties on all_leads.property_id = retail_properties.instruction_id
+    where property_type like '%commercial-property%'
+    and (otm_search_channels like '%sale%' or otm_search_channels like '%rent%')
+group by month, property_type, otm_search_channels
+order by month, property_type, otm_search_channels),
+
+data2 as (select concat(left(created_on, 7),'-01') as month, property_type,
+(case 
+when(otm_search_channels like '%sale%') then 'Sales'
+when(otm_search_channels like '%rent%') then 'Lettings' else 'Other' END) as otm_search_channels,
+ count(distinct instruction_id) as stock from instruction_history
+where status_id = 'available' and live = 1 and status = 'live'
+    and property_type like '%commercial-property%'
+    and (otm_search_channels like '%sale%' or otm_search_channels like '%rent%')
+group by month, property_type, otm_search_channels
+order by month, property_type, otm_search_channels),
+
+leads as(select month, sum(case when otm_search_channels like '%Sales%' then leads else 0 end) as "Sales Leads", 
+ sum(case when otm_search_channels like '%Lettings%' then leads else 0 end) as "Lettings Leads" from data1 
+ group by month order by month asc),
+
+
+stock as(select month, sum(case when otm_search_channels like '%Sales%' then stock else 0 end) as "Sales Stock", 
+ sum(case when otm_search_channels like '%Lettings%' then stock else 0 end) as "Lettings Stock" from data2 
+ group by month order by month asc)
+
+select * from leads left join stock on leads.month = stock.month where leads.month = '2022-07-01' order by leads.month asc """)
+
+data_1 = pd.DataFrame(cur1.fetchall(), columns = [desc[0] for desc in cur1.description])
+
+print(data_1)
+
+cur1.close
+
+##Property Alert Analysis, change it for the month and year needed.
+##Then in the sheet which it has been sent into copy and paste it into the Property Alert Analysis sheet
+
+cur2 = con.cursor()
+
+cur2.execute(""" select
+(CASE 
+ when pas.saved_search_is_summary ='true' and (pas.alert_type = 'monthly' or pas.alert_type = 'monthly-reduced-price') THEN 'monthly roundup'
+ when pas.saved_search_is_summary ='true' THEN 'weekly roundup'
+  ELSE pas.saved_search_schedule END) as schedule,
+count(distinct pas.email_id)
+from user_engagement_spectrum_schema.property_alert_sent pas
+where pas.year=2022 and pas.month = 6
+group by (CASE 
+ when pas.saved_search_is_summary ='true' and (pas.alert_type = 'monthly' or pas.alert_type = 'monthly-reduced-price') THEN 'monthly roundup'
+ when pas.saved_search_is_summary ='true' THEN 'weekly roundup'
+  ELSE pas.saved_search_schedule END)""")
+
+data_2 = pd.DataFrame(cur2.fetchall(), columns = [desc[0] for desc in cur2.description])
+
+## none: Changed to no alerts since sent, instant: instant, daily: daily, 3-days: 3-days, weekly: weekly, weekly roundup: weekly roundup, monthly roundup: monthly roundup
+
+
+PropAlert = data_2.loc[data_2['schedule'].isin(['none','instant','daily','3-days','weekly','weekly roundup', 'monthly roundup'])]
+
+PropAlert.reindex([2,3,4,1,5,0])
+
+print(PropAlert)
+
+cur2.close
+
+
