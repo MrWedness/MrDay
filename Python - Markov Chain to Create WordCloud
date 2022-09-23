@@ -1,0 +1,73 @@
+from bs4 import BeautifulSoup
+
+import requests
+
+import pickle
+
+import pandas as pd
+
+from collections import defaultdict
+
+import random
+
+
+urls = 'https://bestlifeonline.com/knock-knock-jokes/'
+
+
+def url_to_transcript(url):
+  '''Returns transcript data specifically from scrapsfromtheloft.com.'''
+  page = requests.get(url).text
+  soup = BeautifulSoup(page, "lxml")
+
+
+  ol_tags=soup.find_all('ol')
+  list_of_tag_text=[]
+  for ol_tag in ol_tags:
+     list_of_list_items=ol_tag.find_all('li')
+     for list_item in list_of_list_items:
+         list_of_tag_text.append(list_item.text)
+
+  print(url)
+  return(list_of_tag_text)
+
+urls = 'https://bestlifeonline.com/knock-knock-jokes/'
+
+t = url_to_transcript(urls)
+
+q = ' '.join(t)
+
+df = pd.DataFrame(t, columns = ['Jokes'])
+
+def markov_chain(text):
+
+  words = text.split(' ')
+
+  m_dict = defaultdict(list)
+
+  for current_word, next_word in zip(words[0:-1], words[1:]):
+     m_dict[current_word].append(next_word)
+
+  m_dict = dict(m_dict)
+  return(m_dict)
+
+
+
+Wordie = markov_chain(q)
+
+def generate_sentence(chain, count):
+
+  word1 = "Knock"
+  sentence = word1.capitalize()
+
+  for i in range(count-1):
+     word2 = random.choice(chain[word1])
+     word1 = word2
+     sentence += ' ' +word2
+
+  sentence += '.'
+  return(sentence)
+
+
+Final = generate_sentence(Wordie,11)
+
+print(Final)
