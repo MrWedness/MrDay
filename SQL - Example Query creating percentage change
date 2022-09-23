@@ -1,0 +1,75 @@
+with Opp as(SELECT FORMAT_DATE('%Y-%m', date) as formatDate, date,contact_id, 'Opportunity' as DealType,
+case 
+when country_name in ('albania','algeria','andorra','angola','austria','armenia','bahrain','belarus','belgium','benin','bosnia','herzegovina','bosnia & herzegovina','botswana','bulgaria','burkina faso','burundi','cameroon','cape verde','central african republic','chad','comoros','croatia','cyprus','czech republic','democratic republic of the congo','congo - kinshasa','denmark','djibouti','egypt','equatorial guinea','eritrea','estonia','eswatini','ethiopia','faroe islands','finland','france','gabon','gambia','georgia','germany','ghana','gibraltar','greece','guernsey','guinea','guinea-bissau','hungary','iceland','iran','iraq','ireland','isle of man','isle of man','israel','italy','ivory coast','côte d’ivoire','jersey','jordan','kenya','kosovo','kuwait','latvia','lebanon','lesotho','liberia','libya','liechtenstein','lithuania','luxembourg','north macedonia','madagascar','malawi','mali','malta','mauritania','mauritius','moldova','monaco','montenegro','morocco','mozambique','namibia','niger','nigeria','norway','oman','palestine','poland','portugal','qatar','romania','rwanda','russia','san marino','sao tome & principe','saudi arabia','senegal','serbia','sierra leone','slovakia','slovenia','somalia','south africa','spain','south sudan','sudan','swaziland','sweden','switzerland','syria','tanzania','togo','tunisia','turkey','uganda','ukraine','united arab emirates','united kingdom','uraguay','vatican city','western sahara','yemen','zambia','zimbabwe') then 'EMEA'
+when country_name in ('afghanistan','australia','azerbaijan','bangladesh','bhutan','bruen darussalam','brunei','cambodia','china','hong kong','cook islands','democratic poeple’s republic of china','fiji','india','indonesia','japan','kazakhstan','kiribati','lao people’s democratic republic','macao','malaysia','maldives','marshall islands','micronesia(federated states of)','mongolia','myanmar','myanmar (burma)','nauru','nepal','new zealand','pakistan','palau','papua new guinea','philippines','republic of korea','samoa','singapore','solomon islands','south korea','sri lanka','taiwan','thailand','timor leste','tonga','tuvalu','uzbekistan','vanuatu','vietnam')  then 'APAC'
+when country_name in ('united states','greenland','canada') then 'NA'
+else 'Other'
+end
+as region
+FROM `project-dashboard-321811.Client_Evotix.EvotixKPI_Indicators_becameAOpportunity`),
+
+MQL as(SELECT FORMAT_DATE('%Y-%m', date) as formatDate, date,contact_id, 'MQL' as DealType,
+case 
+when country_name in ('albania','algeria','andorra','angola','austria','armenia','bahrain','belarus','belgium','benin','bosnia','herzegovina','bosnia & herzegovina','botswana','bulgaria','burkina faso','burundi','cameroon','cape verde','central african republic','chad','comoros','croatia','cyprus','czech republic','democratic republic of the congo','congo - kinshasa','denmark','djibouti','egypt','equatorial guinea','eritrea','estonia','eswatini','ethiopia','faroe islands','finland','france','gabon','gambia','georgia','germany','ghana','gibraltar','greece','guernsey','guinea','guinea-bissau','hungary','iceland','iran','iraq','ireland','isle of man','isle of man','israel','italy','ivory coast','côte d’ivoire','jersey','jordan','kenya','kosovo','kuwait','latvia','lebanon','lesotho','liberia','libya','liechtenstein','lithuania','luxembourg','north macedonia','madagascar','malawi','mali','malta','mauritania','mauritius','moldova','monaco','montenegro','morocco','mozambique','namibia','niger','nigeria','norway','oman','palestine','poland','portugal','qatar','romania','rwanda','russia','san marino','sao tome & principe','saudi arabia','senegal','serbia','sierra leone','slovakia','slovenia','somalia','south africa','spain','south sudan','sudan','swaziland','sweden','switzerland','syria','tanzania','togo','tunisia','turkey','uganda','ukraine','united arab emirates','united kingdom','uraguay','vatican city','western sahara','yemen','zambia','zimbabwe') then 'EMEA'
+when country_name in ('afghanistan','australia','azerbaijan','bangladesh','bhutan','bruen darussalam','brunei','cambodia','china','hong kong','cook islands','democratic poeple’s republic of china','fiji','india','indonesia','japan','kazakhstan','kiribati','lao people’s democratic republic','macao','malaysia','maldives','marshall islands','micronesia(federated states of)','mongolia','myanmar','myanmar (burma)','nauru','nepal','new zealand','pakistan','palau','papua new guinea','philippines','republic of korea','samoa','singapore','solomon islands','south korea','sri lanka','taiwan','thailand','timor leste','tonga','tuvalu','uzbekistan','vanuatu','vietnam')  then 'APAC'
+when country_name in ('united states','greenland','canada') then 'NA'
+else 'Other'
+end
+as region
+FROM `project-dashboard-321811.Client_Evotix.evotixKPIIndicators_becameAMQL`),
+
+Custo as(SELECT FORMAT_DATE('%Y-%m', date) as formatDate, date,contact_id, 'Customer' as DealType,
+case 
+when country_name in ('albania','algeria','andorra','angola','austria','armenia','bahrain','belarus','belgium','benin','bosnia','herzegovina','bosnia & herzegovina','botswana','bulgaria','burkina faso','burundi','cameroon','cape verde','central african republic','chad','comoros','croatia','cyprus','czech republic','democratic republic of the congo','congo - kinshasa','denmark','djibouti','egypt','equatorial guinea','eritrea','estonia','eswatini','ethiopia','faroe islands','finland','france','gabon','gambia','georgia','germany','ghana','gibraltar','greece','guernsey','guinea','guinea-bissau','hungary','iceland','iran','iraq','ireland','isle of man','isle of man','israel','italy','ivory coast','côte d’ivoire','jersey','jordan','kenya','kosovo','kuwait','latvia','lebanon','lesotho','liberia','libya','liechtenstein','lithuania','luxembourg','north macedonia','madagascar','malawi','mali','malta','mauritania','mauritius','moldova','monaco','montenegro','morocco','mozambique','namibia','niger','nigeria','norway','oman','palestine','poland','portugal','qatar','romania','rwanda','russia','san marino','sao tome & principe','saudi arabia','senegal','serbia','sierra leone','slovakia','slovenia','somalia','south africa','spain','south sudan','sudan','swaziland','sweden','switzerland','syria','tanzania','togo','tunisia','turkey','uganda','ukraine','united arab emirates','united kingdom','uraguay','vatican city','western sahara','yemen','zambia','zimbabwe') then 'EMEA'
+when country_name in ('afghanistan','australia','azerbaijan','bangladesh','bhutan','bruen darussalam','brunei','cambodia','china','hong kong','cook islands','democratic poeple’s republic of china','fiji','india','indonesia','japan','kazakhstan','kiribati','lao people’s democratic republic','macao','malaysia','maldives','marshall islands','micronesia(federated states of)','mongolia','myanmar','myanmar (burma)','nauru','nepal','new zealand','pakistan','palau','papua new guinea','philippines','republic of korea','samoa','singapore','solomon islands','south korea','sri lanka','taiwan','thailand','timor leste','tonga','tuvalu','uzbekistan','vanuatu','vietnam')  then 'APAC'
+when country_name in ('united states','greenland','canada') then 'NA'
+else 'Other'
+end
+as region
+FROM `project-dashboard-321811.Client_Evotix.evotixKPIIndicators_becameACustomer`),
+
+Lead as(
+  
+)
+
+Opp1 as(select formatDate, region, count(contact_id) as Opportunity
+from Opp
+where formatDate = '2022-07' or formatDate = '2022-08' --or formatDate = '2022-02'
+group by formatDate, region
+),
+
+MQL1 as(select formatDate, region, count(contact_id) as MQL
+from MQL
+where formatDate = '2022-07' or formatDate = '2022-08' --or formatDate = '2022-02'
+group by formatDate, region
+),
+
+Custo1 as(select formatDate, region, count(contact_id) as Customer
+from Custo
+where formatDate = '2022-07' or formatDate = '2022-08' --or formatDate = '2022-02'
+group by formatDate, region
+)
+
+
+
+
+ 
+--Values
+---select formatDate, count(contact_id) as Opportunity, region
+--from table1
+--group by formatDate, region
+
+SELECT formatDate,region,
+t.Opportunity,
+(t.Opportunity - LAG(Opportunity) OVER (PARTITION BY region ORDER BY formatDate ASC))/LAG (Opportunity) OVER (PARTITION BY region ORDER BY formatDate Asc) AS OpportunityChange,
+t.Customer,
+(t.Customer - LAG(Customer) OVER (PARTITION BY region ORDER BY formatDate ASC))/LAG (Customer) OVER (PARTITION BY region ORDER BY formatDate Asc) AS CustomerChange,
+t.MQL,
+(t.MQL - LAG(MQL) OVER (PARTITION BY region ORDER BY formatDate ASC))/LAG (MQL) OVER (PARTITION BY region ORDER BY formatDate Asc) AS CustomerChange,
+
+FROM   ( select O.formatDate,O.region, Opportunity, MQL, Customer
+from Opp1 O
+left join  MQL1 on O.formatDate = MQL1.formatDate and O.region = MQL1.region
+left join Custo1 on Custo1.formatDate = MQL1.formatDate and Custo1.region = MQL1.region
+order by formatDate
+        ) t
