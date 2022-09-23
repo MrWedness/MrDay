@@ -1,0 +1,40 @@
+with GA as ( select format_date('%Y-%m-%d',date) as date, dimension3 as GA_ID, channelGrouping
+from `project-dashboard-321811.test.GA_Test_2`),
+
+Hubspot as ( select SUBSTR( google_analytics_id, 7 ) as GA_ID, format_date('%Y-%m-%d',Recent_Deal_Close_Date) as Recent_Deal_Close_Date
+from `project-dashboard-321811.test.SAM_Hubspot_Test`)
+
+
+First Touch
+--select *
+--from (select date, channelGrouping, H.GA_ID, H.Recent_Deal_Close_Date,  
+--row_number() over(partition by H.GA_ID order by date asc) as rn
+--from GA G
+--left join Hubspot H on G.GA_ID = H.GA_ID
+--where H.GA_ID is not null) t 
+--where rn = 1
+
+
+
+
+Last Touch
+--select *
+--from (select date, channelGrouping, H.GA_ID, H.Recent_Deal_Close_Date,  
+--row_number() over(partition by H.GA_ID order by date desc) as rn
+--from GA G
+--left join Hubspot H on G.GA_ID = H.GA_ID
+--where H.GA_ID is not null) t 
+--where rn = 1
+
+
+
+Linear Touch 
+
+select distinct GA_ID, channelGrouping, Recent_Deal_Amount,
+SUM(Recent_Deal_Amount) OVER (PARTITION BY t.GA_ID,t.channelGrouping) / SUM(t.Recent_Deal_Amount) OVER(PARTITION by t.GA_ID) as percentage_of_channels,
+Recent_Deal_Amount * SUM(Recent_Deal_Amount) OVER (PARTITION BY t.GA_ID,t.channelGrouping) / SUM(t.Recent_Deal_Amount) OVER(PARTITION by t.GA_ID) as Deal_Partitioned
+from (select date, channelGrouping, H.GA_ID, H.Recent_Deal_Close_Date, sum(H.Recent_Deal_Amount) as Recent_Deal_Amount, count(H.Recent_Deal_Close_Date) as Recent_Deal_Close_Date_Count, 
+from GA G
+right join Hubspot H on G.GA_ID = H.GA_ID
+where G.GA_ID != '1593882262.1652339653'
+group by date, channelGrouping, H.GA_ID,H.Recent_Deal_Close_Date) t
