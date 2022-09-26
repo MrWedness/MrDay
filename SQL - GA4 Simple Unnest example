@@ -1,0 +1,16 @@
+with table1 as (SELECT event_name,event_date,
+(SELECT value.string_value FROM UNNEST(event_params) WHERE key = "Element") AS Click_Element, device.category
+FROM `otm-marketing.analytics_251352739.events_*`
+where event_name = 'Click'
+and _table_suffix between '20211210' and '20220120'
+),
+ 
+table2 as (SELECT event_date,device.category FROM `otm-marketing.analytics_251352739.events_*` where _table_suffix between '20211210' and '20220120')
+ 
+select table1.event_date, table2.category, table1.Click_Element,count(Click_Element)
+FROM table1
+LEFT JOIN table2
+ON table1.event_date = table2.event_date
+where Click_Element not like '%Media%' and Click_Element = 'Agent Logo' or Click_Element = 'Request Viewing Sticky CTA' or Click_Element = 'Email Agent Top CTA' or Click_Element = 'Call Icon' and category = 'desktop' 
+group by event_date,category,Click_Element
+LIMIT 10
